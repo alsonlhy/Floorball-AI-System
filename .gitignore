@@ -10,3 +10,7 @@ analysis/data/
 *.mp4
 *.mov
 *.pt
+
+# Claude Code files stay local
+.claude/
+CLAUDE.md
