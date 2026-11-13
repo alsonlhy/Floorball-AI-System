@@ -2,13 +2,27 @@ import type Konva from 'konva';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Layer, Rect, Stage } from 'react-konva';
 import { debugState } from '../debug';
+import { drawingsForFrame } from '../model/drawing';
 import { KeyframeTrackSource } from '../model/keyframeTrackSource';
 import { viewBounds } from '../model/rink';
 import type { Vec } from '../model/types';
 import { useBoardStore } from '../store/boardStore';
+import { useToolStore } from '../store/toolStore';
+import { TOOLS } from '../tools';
+import type { ToolGesture } from '../tools/types';
+import { DrawingLayer } from './DrawingLayer';
 import { EntityLayer } from './EntityLayer';
 import { RinkLayer } from './RinkLayer';
-import { fitViewport, panBy, rinkToScreen, zoomAt, type Size, type Viewport } from './viewport';
+import { TextEntry } from './TextEntry';
+import {
+  fitViewport,
+  panBy,
+  rinkToScreen,
+  screenToRink,
+  zoomAt,
+  type Size,
+  type Viewport,
+} from './viewport';
 
 interface Props {
   /** Incremented by the toolbar's Fit button. */
@@ -26,6 +40,11 @@ export function BoardStage({ fitSignal }: Props) {
   const select = useBoardStore((s) => s.select);
   const toggleSelect = useBoardStore((s) => s.toggleSelect);
   const moveEntities = useBoardStore((s) => s.moveEntities);
+  const beginGesture = useBoardStore((s) => s.beginGesture);
+  const endGesture = useBoardStore((s) => s.endGesture);
+  const tool = useToolStore((s) => s.tool);
+  const draft = useToolStore((s) => s.draft);
+  const textAt = useToolStore((s) => s.textAt);
 
   // ---- viewport: fit to space, plus the user's zoom/pan on top ----
   useEffect(() => {
@@ -52,7 +71,13 @@ export function BoardStage({ fitSignal }: Props) {
     vpRef.current = vp;
     debugState.viewport = vp;
   }, [vp]);
-  const setVp = useCallback((next: Viewport) => setOverride({ key: fitKey, vp: next }), [fitKey]);
+  const setVp = useCallback(
+    (next: Viewport) => {
+      vpRef.current = next;
+      setOverride({ key: fitKey, vp: next });
+    },
+    [fitKey],
+  );
 
   // ---- Rule 2: render entity state from a TrackSource, never from frames directly ----
   const source = useMemo(
@@ -60,11 +85,18 @@ export function BoardStage({ fitSignal }: Props) {
     [board.entities, board.frames],
   );
   const states = useMemo(() => source.stateAt(source.frameTime(frameIndex)), [source, frameIndex]);
+  // ---- Rule 3: drawings visible on this frame ----
+  const frameId = board.frames[frameIndex]?.id;
+  const drawings = useMemo(
+    () => drawingsForFrame(board.drawings, frameId),
+    [board.drawings, frameId],
+  );
 
-  // ---- gestures: pinch-zoom + two-finger pan (touch), wheel zoom, right/middle-drag pan ----
+  // ---- pointer state ----
   const touches = useRef(new Map<number, Vec>());
   const pinch = useRef<{ startVp: Viewport; mid: Vec; dist: number } | null>(null);
-  const mousePan = useRef<{ last: Vec } | null>(null);
+  const pan = useRef<{ pointerId: number; last: Vec } | null>(null);
+  const drawing = useRef<{ pointerId: number; gesture: ToolGesture } | null>(null);
   type Box = { a: Vec; b: Vec; additive: boolean };
   const [box, setBoxState] = useState<Box | null>(null);
   const boxRef = useRef<Box | null>(null);
@@ -88,24 +120,87 @@ export function BoardStage({ fitSignal }: Props) {
     };
   };
 
+  /** Keep receiving moves outside the board. Best effort: throws for an inactive pointer id. */
+  const capture = (pointerId: number) => {
+    try {
+      wrapRef.current?.setPointerCapture(pointerId);
+    } catch {
+      // ignore
+    }
+  };
+
   const stopEntityDrags = () => {
     stageRef.current?.find('.entity').forEach((n) => {
       if (n.isDragging()) n.stopDrag();
     });
+    endGesture();
+  };
+
+  const startDrawing = (ev: React.PointerEvent) => {
+    if (tool === 'select') return;
+    const ts = useToolStore.getState();
+    if (ts.textAt) {
+      // A tap elsewhere while typing commits the text (TextEntry's blur) and starts nothing.
+      return;
+    }
+    const bs = useBoardStore.getState();
+    const p = screenToRink(localPoint(ev), vpRef.current);
+    const pressure = ev.pointerType === 'pen' ? ev.pressure : undefined;
+    const gesture = TOOLS[tool].begin(
+      {
+        board: bs,
+        getBoard: () => useBoardStore.getState().board,
+        tools: ts,
+        scale: vpRef.current.scale,
+      },
+      p,
+      pressure,
+    );
+    if (gesture) drawing.current = { pointerId: ev.pointerId, gesture };
   };
 
   const onPointerDownCapture = (ev: React.PointerEvent) => {
+    const drawMode = tool !== 'select';
+    if (ev.pointerType === 'pen' && !useToolStore.getState().penDetected) {
+      useToolStore.getState().setPenDetected(true);
+    }
+    const penMode = useToolStore.getState().penDetected;
+
     if (ev.pointerType === 'touch') {
       touches.current.set(ev.pointerId, localPoint(ev));
       if (touches.current.size === 2) {
+        // Second finger: whatever the first one started becomes a pinch.
         stopEntityDrags();
         setBox(null);
+        drawing.current?.gesture.cancel();
+        drawing.current = null;
+        pan.current = null;
         const tf = twoFinger()!;
         pinch.current = { startVp: vpRef.current, mid: tf.mid, dist: Math.max(1, tf.dist) };
+        return;
       }
-    } else if (ev.pointerType === 'mouse' && (ev.button === 1 || ev.button === 2)) {
-      mousePan.current = { last: localPoint(ev) };
-      (ev.target as Element).setPointerCapture?.(ev.pointerId);
+      if (touches.current.size > 2) return;
+      if (drawMode) {
+        capture(ev.pointerId);
+        if (penMode) {
+          // Stylus seen: fingers only pan and zoom, so a resting palm draws nothing.
+          pan.current = { pointerId: ev.pointerId, last: localPoint(ev) };
+        } else {
+          startDrawing(ev);
+        }
+      }
+      return;
+    }
+
+    if (ev.pointerType === 'mouse' && (ev.button === 1 || ev.button === 2)) {
+      pan.current = { pointerId: ev.pointerId, last: localPoint(ev) };
+      capture(ev.pointerId);
+      return;
+    }
+
+    if (drawMode && ev.button === 0) {
+      capture(ev.pointerId);
+      startDrawing(ev);
     }
   };
 
@@ -117,12 +212,27 @@ export function BoardStage({ fitSignal }: Props) {
       if (p && tf) {
         const panned = panBy(p.startVp, tf.mid.x - p.mid.x, tf.mid.y - p.mid.y);
         setVp(zoomAt(panned, tf.mid, tf.dist / p.dist, fit.scale));
+        return;
       }
-    } else if (mousePan.current) {
+    }
+    if (pan.current && pan.current.pointerId === ev.pointerId) {
       const pt = localPoint(ev);
-      const last = mousePan.current.last;
-      mousePan.current.last = pt;
+      const last = pan.current.last;
+      pan.current.last = pt;
       setVp(panBy(vpRef.current, pt.x - last.x, pt.y - last.y));
+      return;
+    }
+    const d = drawing.current;
+    if (d && d.pointerId === ev.pointerId) {
+      // Coalesced events give the full-rate path of a fast pen.
+      const native = ev.nativeEvent;
+      const evs = native.getCoalescedEvents?.() ?? [];
+      for (const e of evs.length ? evs : [native]) {
+        d.gesture.move(
+          screenToRink(localPoint(e), vpRef.current),
+          e.pointerType === 'pen' ? e.pressure : undefined,
+        );
+      }
     }
   };
 
@@ -130,8 +240,13 @@ export function BoardStage({ fitSignal }: Props) {
     if (ev.pointerType === 'touch') {
       touches.current.delete(ev.pointerId);
       if (touches.current.size < 2) pinch.current = null;
-    } else {
-      mousePan.current = null;
+    }
+    if (pan.current?.pointerId === ev.pointerId) pan.current = null;
+    const d = drawing.current;
+    if (d && d.pointerId === ev.pointerId) {
+      drawing.current = null;
+      if (ev.type === 'pointercancel') d.gesture.cancel();
+      else d.gesture.end();
     }
   };
 
@@ -149,8 +264,9 @@ export function BoardStage({ fitSignal }: Props) {
     return () => el.removeEventListener('wheel', prevent);
   }, []);
 
-  // ---- tap empty space to clear selection; drag on empty space for a selection box ----
+  // ---- select tool: tap empty space clears selection; drag on empty space box-selects ----
   const onStagePointerDown = (e: Konva.KonvaEventObject<PointerEvent>) => {
+    if (tool !== 'select') return;
     if (e.target !== e.target.getStage()) return;
     if (e.evt.button !== 0 || pinch.current || touches.current.size > 1) return;
     const pt = localPoint(e.evt);
@@ -199,7 +315,7 @@ export function BoardStage({ fitSignal }: Props) {
   return (
     <div
       ref={wrapRef}
-      className="board-stage"
+      className={`board-stage tool-${tool}`}
       data-testid="board-stage"
       data-rotation={vp.rotation}
       onPointerDownCapture={onPointerDownCapture}
@@ -217,6 +333,7 @@ export function BoardStage({ fitSignal }: Props) {
           onPointerDown={onStagePointerDown}
         >
           <RinkLayer spec={board.rink} vp={vp} />
+          <DrawingLayer drawings={drawings} draft={draft} vp={vp} />
           <EntityLayer
             entities={source.entities}
             states={states}
@@ -224,8 +341,11 @@ export function BoardStage({ fitSignal }: Props) {
             rink={board.rink}
             teamColors={board.teamColors}
             selection={selection}
+            interactive={tool === 'select'}
             onSelect={(id, additive) => (additive ? toggleSelect(id) : select([id]))}
             onMove={moveEntities}
+            onDragBegin={beginGesture}
+            onDragFinish={endGesture}
           />
           <Layer listening={false}>
             {box && (
@@ -243,6 +363,7 @@ export function BoardStage({ fitSignal }: Props) {
           </Layer>
         </Stage>
       )}
+      {textAt && <TextEntry at={rinkToScreen(textAt, vp)} />}
     </div>
   );
 }

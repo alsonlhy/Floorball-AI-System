@@ -173,3 +173,71 @@ input[type='color'] {
   -webkit-user-select: none;
   -webkit-touch-callout: none;
 }
+
+.board-stage:not(.tool-select) {
+  cursor: crosshair;
+}
+
+.board-stage.tool-eraser {
+  cursor: cell;
+}
+
+.text-entry {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  min-width: 10em;
+  min-height: 44px;
+  font-weight: 600;
+  border: 2px solid var(--accent);
+  background: #fff;
+  z-index: 2;
+}
+
+.toolbar .divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border);
+}
+
+button[aria-pressed='true'] {
+  background: #e0f2fe;
+  border-color: var(--accent);
+  color: #075985;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.color-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid rgba(0, 0, 0, 0.35);
+}
+
+.width-bar {
+  display: inline-block;
+  width: 20px;
+  background: currentColor;
+  border-radius: 3px;
+}
+
+/* Narrow screens: each bar is one scrollable row so the rink keeps its space (M6 refines this). */
+@media (max-width: 820px) {
+  .toolbar {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: thin;
+  }
+  .toolbar .group {
+    flex-wrap: nowrap;
+    flex-shrink: 0;
+  }
+  .toolbar button,
+  .toolbar .field {
+    flex-shrink: 0;
+    white-space: nowrap;
+  }
+}

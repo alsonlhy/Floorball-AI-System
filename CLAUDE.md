@@ -25,8 +25,10 @@ In dev builds (or with `?debug` in the URL) `window.__floorball` exposes the sto
 
 ## Layout of `app/src`
 
-`model/` types, rink geometry, migration, `KeyframeTrackSource` · `store/` Zustand store · `board/` Konva stage, layers, viewport transform · `ui/` toolbar and inspector · `presets/` formations (M7).
+`model/` types, rink geometry, drawing geometry, undo history, migration, `KeyframeTrackSource` · `store/` board store (every mutation goes through `commit`, which records undo) and tool store (UI-only) · `board/` Konva stage, layers, viewport transform · `tools/` one module per drawing tool · `ui/` toolbars and inspector · `presets/` formations (M7).
+
+Undo: every board mutation is one step. Drags and eraser sweeps are bracketed by `beginGesture` / `endGesture` so a whole gesture is one step; label typing and colour picking merge by key.
 
 ## Status
 
-Phase 2 milestones M0–M2 are built (scaffold, rink and viewport, players/ball/cones). Next is M3 (drawing tools and undo).
+Phase 2 milestones M0–M3 are built (scaffold, rink and viewport, players/ball/cones, drawing tools and undo). Next is M4 (saving and sharing).

@@ -17,8 +17,13 @@ interface Props {
   rink: RinkSpec;
   teamColors: TeamColors;
   selection: string[];
+  /** False while a drawing tool is active: tokens are neither hit nor dragged. */
+  interactive: boolean;
   onSelect(id: string, additive: boolean): void;
   onMove(moves: Record<string, Vec>): void;
+  /** A drag is one undo step: begin/finish bracket it. */
+  onDragBegin(): void;
+  onDragFinish(): void;
 }
 
 /** Hit area drawn by every token: never smaller than the 44 pt target. */
@@ -33,7 +38,8 @@ function hitCircle(r: number) {
 }
 
 export function EntityLayer(props: Props) {
-  const { entities, states, vp, rink, teamColors, selection, onSelect, onMove } = props;
+  const { entities, states, vp, rink, teamColors, selection, interactive } = props;
+  const { onSelect, onMove, onDragBegin, onDragFinish } = props;
   const dragStart = useRef<{ id: string; starts: Record<string, Vec> } | null>(null);
 
   const colorOf = (e: Entity) =>
@@ -42,7 +48,7 @@ export function EntityLayer(props: Props) {
   const boundFor = (pos: Vec) => rinkToScreen(clampToRink(screenToRink(pos, vp), rink), vp);
 
   return (
-    <Layer name="entity-layer">
+    <Layer name="entity-layer" listening={interactive}>
       {entities.map((e) => {
         const st = states.get(e.id);
         if (!st || st.visible === false) return null;
@@ -59,7 +65,7 @@ export function EntityLayer(props: Props) {
             x={p.x}
             y={p.y}
             opacity={st.confidence !== undefined ? 0.35 + 0.65 * st.confidence : 1}
-            draggable
+            draggable={interactive}
             dragBoundFunc={boundFor}
             onClick={(ev) => onSelect(e.id, ev.evt.shiftKey || ev.evt.metaKey || ev.evt.ctrlKey)}
             onTap={() => onSelect(e.id, false)}
@@ -76,6 +82,7 @@ export function EntityLayer(props: Props) {
                 if (s) starts[id] = s.pos;
               }
               dragStart.current = { id: e.id, starts };
+              onDragBegin();
               ev.target.moveToTop();
             }}
             onDragMove={(ev) => {
@@ -93,6 +100,7 @@ export function EntityLayer(props: Props) {
             }}
             onDragEnd={() => {
               dragStart.current = null;
+              onDragFinish();
             }}
           >
             {selected && (

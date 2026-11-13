@@ -41,17 +41,29 @@ export interface Frame {
   positions: Record<string, Vec>;
 }
 
+export type DrawingTool = 'pen' | 'line' | 'arrow' | 'zone' | 'text';
+
+export interface DrawingStyle {
+  color: string;
+  widthM: number;
+  /** Arrow conventions: solid = player run, dashed = pass, double = shot. */
+  dash?: 'solid' | 'dashed' | 'double';
+  head?: 'none' | 'arrow';
+  fill?: string;
+  /** Text height in metres (text tool). */
+  fontSizeM?: number;
+}
+
 export interface Drawing {
   id: string;
-  tool: 'pen' | 'line' | 'arrow' | 'zone' | 'text';
+  tool: DrawingTool;
+  /** pen: the stroke; line/arrow: [start, end]; zone: two opposite corners; text: [anchor]. */
   points: Vec[];
-  style: {
-    color: string;
-    widthM: number;
-    dash?: 'solid' | 'dashed';
-    head?: 'none' | 'arrow';
-    fill?: string;
-  };
+  /** Pen pressure per point (0-1), when the input device reports it. */
+  pressures?: number[];
+  /** Zone shape. */
+  shape?: 'rect' | 'ellipse';
+  style: DrawingStyle;
   text?: string;
   frameId?: string; // undefined = shown on every frame (Rule 3)
 }

@@ -24,8 +24,16 @@ for (const s of sizes) {
     await page.goto('/');
     await expect(page.getByTestId('board-stage').locator('canvas').first()).toBeVisible();
     const vp = await viewportOf(page);
-    expect(vp.rotation).toBe(s.rotation);
     const box = await stageBox(page);
+    // Orientation is whichever shows the rink (plus margin, 43 x 23 m) largest.
+    const pad = 16;
+    const s0 = Math.min((box.width - pad) / 43, (box.height - pad) / 23);
+    const s90 = Math.min((box.width - pad) / 23, (box.height - pad) / 43);
+    // (fitViewport keeps landscape unless rotating gains more than 5%)
+    expect(vp.scale).toBeCloseTo(vp.rotation === 90 ? s90 : s0, 6);
+    if (vp.rotation === 0) expect(s90).toBeLessThanOrEqual(s0 * 1.05);
+    else expect(s90).toBeGreaterThan(s0 * 1.05);
+    expect(vp.rotation).toBe(s.rotation);
     const r = await rinkOnScreen(page, 40, 20);
     // Inside the stage
     expect(r.left).toBeGreaterThanOrEqual(box.x - 0.5);
@@ -37,7 +45,7 @@ for (const s of sizes) {
     const h = r.bottom - r.top;
     expect(Math.max(w, h) / Math.min(w, h)).toBeCloseTo(2, 5);
     // Uses most of the available space
-    const fill = s.rotation === 0 ? w / box.width : h / box.height;
+    const fill = vp.rotation === 0 ? w / box.width : h / box.height;
     expect(fill).toBeGreaterThan(0.75);
   });
 }
