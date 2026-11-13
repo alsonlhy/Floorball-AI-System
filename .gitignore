@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+node_modules/
+dist/
+
+# Footage, model weights and pipeline outputs stay out of git
+analysis/data/
+*.mp4
+*.mov
+*.pt
