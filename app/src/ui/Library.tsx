@@ -58,6 +58,9 @@ export function Library() {
       <header className="library-head">
         <h1>Boards</h1>
         <div className="group">
+          <button data-testid="open-sample" onClick={() => navigate('#/sample')}>
+            Sample drill
+          </button>
           <button data-testid="import-board" onClick={onImport}>
             Import…
           </button>

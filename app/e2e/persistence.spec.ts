@@ -176,3 +176,14 @@ test('export the current view as PNG', async ({ page }, info) => {
   expect([...bytes.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   expect(bytes.length).toBeGreaterThan(5000);
 });
+
+test('the sample drill opens on a fresh device', async ({ page }) => {
+  await page.goto('/#/sample');
+  await page.getByTestId('board-stage').locator('canvas').first().waitFor();
+  const b = await board(page);
+  expect(b.name).toBe('Sample: switch and shoot');
+  expect((b.frames as unknown[]).length).toBe(3);
+  expect(page.url()).toContain(`#/b/${b.id}`);
+  await page.getByTestId('back-to-library').click();
+  await expect(page.getByTestId('board-name-label')).toHaveText(['Sample: switch and shoot']);
+});

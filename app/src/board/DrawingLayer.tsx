@@ -1,7 +1,7 @@
-import { getStroke } from 'perfect-freehand';
 import { Arrow, Ellipse, Group, Layer, Line, Rect, Text } from 'react-konva';
 import { boundsOf, TEXT_SIZE_PER_WIDTH } from '../model/drawing';
 import type { Drawing } from '../model/types';
+import { penOutline } from './penStroke';
 import { rinkToScreen, viewportGroupAttrs, type Viewport } from './viewport';
 
 /** Rink surface colour, used to hollow out the "shot" double line. */
@@ -23,34 +23,36 @@ export function DrawingLayer({ drawings, draft, vp }: Props) {
     <Layer listening={false} name="drawing-layer">
       <Group {...viewportGroupAttrs(vp)}>
         {drawings.map((d) => (d.tool === 'text' ? null : <Shape key={d.id} d={d} />))}
-        {draft && draft.tool !== 'text' && <Shape d={draft} opacity={0.8} />}
+        {draft && draft.tool !== 'text' && <Shape d={draft} opacity={0.8} draft />}
       </Group>
       {drawings.map((d) => (d.tool === 'text' ? <TextMark key={d.id} d={d} vp={vp} /> : null))}
     </Layer>
   );
 }
 
-function Shape({ d, opacity = 1 }: { d: Omit<Drawing, 'id'>; opacity?: number }) {
+function Shape({
+  d,
+  opacity = 1,
+  draft = false,
+}: {
+  d: Omit<Drawing, 'id'>;
+  opacity?: number;
+  draft?: boolean;
+}) {
   const { color, widthM } = d.style;
   const flat = d.points.flatMap((p) => [p.x, p.y]);
   const dash = d.style.dash === 'dashed' ? [widthM * 4, widthM * 3] : undefined;
 
   switch (d.tool) {
     case 'pen': {
-      const outline = getStroke(
-        d.points.map((p, i) => [p.x, p.y, d.pressures?.[i] ?? 0.5]),
-        {
-          size: widthM * 1.8,
-          thinning: d.pressures ? 0.6 : 0.4,
-          smoothing: 0.5,
-          streamline: 0.4,
-          simulatePressure: !d.pressures,
-        },
-      );
+      const outline = penOutline(d.points, widthM, {
+        ...(d.pressures ? { pressures: d.pressures } : {}),
+        complete: !draft,
+      });
       return (
         <Line
           name="drawing"
-          points={outline.flat()}
+          points={outline}
           closed
           fill={color}
           opacity={opacity}
