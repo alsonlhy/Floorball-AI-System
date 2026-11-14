@@ -3,7 +3,7 @@ import { entityPagePos, rinkToPage, snapshot } from './helpers';
 
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 800 });
-  await page.goto('/');
+  await page.goto('/#/new');
   await expect(page.getByTestId('board-stage').locator('canvas').first()).toBeVisible();
 });
 

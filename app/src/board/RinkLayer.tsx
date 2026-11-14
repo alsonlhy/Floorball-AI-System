@@ -1,5 +1,5 @@
 import { Circle, Group, Layer, Line, Rect } from 'react-konva';
-import { OFFICIAL, rinkGeometry, type Rect as RRect } from '../model/rink';
+import { OFFICIAL, rinkGeometry, viewBounds, type Rect as RRect } from '../model/rink';
 import type { RinkSpec } from '../model/types';
 import { viewportGroupAttrs, type Viewport } from './viewport';
 
@@ -44,7 +44,7 @@ export function RinkLayer({ spec, vp }: Props) {
 
   return (
     <Layer listening={false} name="rink-layer">
-      <Group {...viewportGroupAttrs(vp)}>
+      <Group {...viewportGroupAttrs(vp)} {...halfClip(spec)}>
         <Rect
           name="rink-boards"
           x={g.boards.x}
@@ -87,4 +87,11 @@ export function RinkLayer({ spec, vp }: Props) {
       </Group>
     </Layer>
   );
+}
+
+/** Half-rink views draw only that half (plus the off-rink margin), whatever the screen shape. */
+function halfClip(spec: RinkSpec) {
+  if (spec.view === 'full') return {};
+  const b = viewBounds(spec);
+  return { clipX: b.x, clipY: b.y, clipWidth: b.w, clipHeight: b.h };
 }

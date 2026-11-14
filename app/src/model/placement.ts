@@ -38,8 +38,8 @@ function grid(spec: RinkSpec, team: Team | undefined): Vec[] {
     for (let j = -r; j <= r; j++) {
       for (let i = -r; i <= r; i++) {
         if (Math.max(Math.abs(i), Math.abs(j)) !== r) continue;
-        const x = cx + i * step;
-        const y = j * step;
+        const x = cx + i * step + 0; // + 0: no -0 (JSON drops the sign)
+        const y = j * step + 0;
         if (x < lo - 1e-9 || x > hi + 1e-9 || Math.abs(y) > halfW - 2) continue;
         pts.push({ x, y });
       }

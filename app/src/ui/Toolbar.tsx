@@ -1,13 +1,15 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { CUSTOM_LIMITS, presetOf, RINK_PRESETS, type RinkPresetId } from '../model/rink';
 import type { RinkView } from '../model/types';
 import { useBoardStore } from '../store/boardStore';
 
 interface Props {
   onFit(): void;
+  /** Leading controls (back to library, board name, export). */
+  lead?: ReactNode;
 }
 
-export function Toolbar({ onFit }: Props) {
+export function Toolbar({ onFit, lead }: Props) {
   const rink = useBoardStore((s) => s.board.rink);
   const teamColors = useBoardStore((s) => s.board.teamColors);
   const addEntity = useBoardStore((s) => s.addEntity);
@@ -28,6 +30,7 @@ export function Toolbar({ onFit }: Props) {
 
   return (
     <header className="toolbar" role="toolbar" aria-label="Board tools">
+      {lead}
       <div className="group" aria-label="Add">
         <button
           data-testid="add-home-player"

@@ -1,61 +1,35 @@
-import { useEffect, useState } from 'react';
-import { BoardStage } from './board/BoardStage';
+import { useEffect, useRef, useState } from 'react';
+import { getRepository } from './platform/storage';
 import { useBoardStore } from './store/boardStore';
-import { useToolStore, type ToolId } from './store/toolStore';
-import { DrawBar } from './ui/DrawBar';
-import { Inspector } from './ui/Inspector';
-import { Toolbar } from './ui/Toolbar';
-
-const TOOL_KEYS: Record<string, ToolId> = {
-  v: 'select',
-  p: 'pen',
-  l: 'line',
-  a: 'arrow',
-  z: 'zone',
-  t: 'text',
-  e: 'eraser',
-};
+import { createStoredBoard } from './store/library';
+import { BoardScreen } from './ui/BoardScreen';
+import { Library } from './ui/Library';
+import { boardHash, navigate, useRoute } from './ui/router';
 
 export function App() {
-  const [fitSignal, setFitSignal] = useState(0);
+  const route = useRoute();
+  if (route.name === 'board') return <BoardScreen key={route.id} id={route.id} />;
+  if (route.name === 'new') return <NewBoard />;
+  return <Library />;
+}
 
+/** #/new: create a board, then replace the URL with the board's own so reload reopens it. */
+function NewBoard() {
+  const started = useRef(false); // StrictMode runs effects twice; create only once
+  const [error, setError] = useState<string | null>(null);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === 'INPUT' || t.tagName === 'SELECT' || t.tagName === 'TEXTAREA'))
-        return;
-      const s = useBoardStore.getState();
-      const mod = e.ctrlKey || e.metaKey;
-      const key = e.key.toLowerCase();
-      if (mod && key === 'z') {
-        e.preventDefault();
-        if (e.shiftKey) s.redo();
-        else s.undo();
-      } else if (mod && key === 'y') {
-        e.preventDefault();
-        s.redo();
-      } else if ((e.key === 'Delete' || e.key === 'Backspace') && s.selection.length > 0) {
-        e.preventDefault();
-        s.deleteEntities(s.selection);
-      } else if (e.key === 'Escape') {
-        s.select([]);
-        useToolStore.getState().setTool('select');
-      } else if (!mod && !e.altKey && TOOL_KEYS[key]) {
-        useToolStore.getState().setTool(TOOL_KEYS[key]);
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
+    if (started.current) return;
+    started.current = true;
+    createStoredBoard(getRepository())
+      .then((b) => {
+        useBoardStore.getState().reset(b);
+        navigate(boardHash(b.id), true);
+      })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : String(e)));
   }, []);
-
   return (
-    <div className="app">
-      <Toolbar onFit={() => setFitSignal((n) => n + 1)} />
-      <DrawBar />
-      <main className="board-area">
-        <BoardStage fitSignal={fitSignal} />
-      </main>
-      <Inspector />
+    <div className="screen-message">
+      {error ? <p role="alert">Could not create a board: {error}</p> : <p>Creating board…</p>}
     </div>
   );
 }

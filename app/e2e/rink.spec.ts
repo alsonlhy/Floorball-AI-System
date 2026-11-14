@@ -21,7 +21,8 @@ const sizes = [
 for (const s of sizes) {
   test(`rink fits undistorted at ${s.width}x${s.height} (${s.name})`, async ({ page }) => {
     await page.setViewportSize({ width: s.width, height: s.height });
-    await page.goto('/');
+    await page.goto('/#/new');
+    await page.getByTestId('board-stage').locator('canvas').first().waitFor();
     await expect(page.getByTestId('board-stage').locator('canvas').first()).toBeVisible();
     const vp = await viewportOf(page);
     const box = await stageBox(page);
@@ -45,29 +46,52 @@ for (const s of sizes) {
     const h = r.bottom - r.top;
     expect(Math.max(w, h) / Math.min(w, h)).toBeCloseTo(2, 5);
     // Uses most of the available space
-    const fill = vp.rotation === 0 ? w / box.width : h / box.height;
-    expect(fill).toBeGreaterThan(0.75);
+    // Uses the limiting dimension of the stage
+    expect(Math.max(w / box.width, h / box.height)).toBeGreaterThan(0.8); // rink is 40x20 inside a 43x23 view
   });
 }
 
 test('half-rink views show the correct half', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
-  await page.goto('/');
-  const box = await stageBox(page);
-  const inside = (p: { x: number; y: number }) =>
-    p.x >= box.x && p.x <= box.x + box.width && p.y >= box.y && p.y <= box.y + box.height;
+  await page.goto('/#/new');
+  await page.getByTestId('board-stage').locator('canvas').first().waitFor();
+
+  /** Is rink surface drawn at this rink point? Reads the rink layer's own canvas. */
+  const drawnAt = async (p: { x: number; y: number }) => {
+    const s = await rinkToPage(page, p);
+    return page.evaluate(({ x, y }) => {
+      const canvas = document.querySelector<HTMLCanvasElement>(
+        '[data-testid="board-stage"] canvas',
+      )!;
+      const r = canvas.getBoundingClientRect();
+      if (x < r.left || x > r.right || y < r.top || y > r.bottom) return false;
+      const k = canvas.width / r.width;
+      const px = canvas
+        .getContext('2d')!
+        .getImageData((x - r.left) * k, (y - r.top) * k, 1, 1).data;
+      return px[3]! > 0;
+    }, s);
+  };
+  // Points on open rink surface near each goal (clear of markings).
+  const leftEnd = { x: -15, y: 6 };
+  const rightEnd = { x: 15, y: 6 };
 
   await page.getByTestId('rink-view').selectOption('half-left');
-  expect(inside(await rinkToPage(page, { x: -16.5, y: 0 }))).toBe(true);
-  expect(inside(await rinkToPage(page, { x: 16.5, y: 0 }))).toBe(false);
+  await expect.poll(() => drawnAt(leftEnd)).toBe(true);
+  expect(await drawnAt(rightEnd)).toBe(false);
 
   await page.getByTestId('rink-view').selectOption('half-right');
-  expect(inside(await rinkToPage(page, { x: 16.5, y: 0 }))).toBe(true);
-  expect(inside(await rinkToPage(page, { x: -16.5, y: 0 }))).toBe(false);
+  await expect.poll(() => drawnAt(rightEnd)).toBe(true);
+  expect(await drawnAt(leftEnd)).toBe(false);
+
+  await page.getByTestId('rink-view').selectOption('full');
+  await expect.poll(() => drawnAt(leftEnd)).toBe(true);
+  expect(await drawnAt(rightEnd)).toBe(true);
 });
 
 test('rink size presets and custom size', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/#/new');
+  await page.getByTestId('board-stage').locator('canvas').first().waitFor();
   await page.getByTestId('rink-preset').selectOption('minimum');
   expect((await snapshot(page)).rink).toMatchObject({ lengthM: 36, widthM: 18 });
   await page.getByTestId('rink-preset').selectOption('custom');
@@ -83,7 +107,8 @@ test('rink size presets and custom size', async ({ page }) => {
 
 test('wheel zooms about the cursor and Fit restores the view', async ({ page }) => {
   await page.setViewportSize({ width: 1024, height: 768 });
-  await page.goto('/');
+  await page.goto('/#/new');
+  await page.getByTestId('board-stage').locator('canvas').first().waitFor();
   const before = await viewportOf(page);
   const box = await stageBox(page);
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);

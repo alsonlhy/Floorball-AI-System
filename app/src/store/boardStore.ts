@@ -35,6 +35,7 @@ export interface BoardState {
   setRinkSize(lengthM: number, widthM: number): void;
   setView(view: RinkView): void;
   setTeamColor(team: 'home' | 'away', color: string): void;
+  setName(name: string): void;
 
   addDrawing(d: Omit<Drawing, 'id'>): string;
   deleteDrawings(ids: string[]): void;
@@ -236,9 +237,18 @@ export const useBoardStore = create<BoardState>()((set, get) => {
       );
     },
 
+    setName(name) {
+      const s = get();
+      const next = name.slice(0, 120);
+      if (next === s.board.name) return;
+      commit({ ...s.board, name: next }, { key: 'name' });
+    },
+
     addDrawing(d) {
       const s = get();
-      const drawing: Drawing = { ...d, id: newId('d_') };
+      // + 0 turns -0 into 0 so saved files round-trip exactly.
+      const points = d.points.map((p) => ({ x: p.x + 0, y: p.y + 0 }));
+      const drawing: Drawing = { ...d, points, id: newId('d_') };
       commit({ ...s.board, drawings: [...s.board.drawings, drawing] });
       return drawing.id;
     },

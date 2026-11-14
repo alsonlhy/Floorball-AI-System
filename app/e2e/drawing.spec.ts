@@ -31,7 +31,7 @@ async function stroke(page: Page, pts: { x: number; y: number }[]) {
 
 test.beforeEach(async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 860 });
-  await page.goto('/');
+  await page.goto('/#/new');
   await expect(page.getByTestId('board-stage').locator('canvas').first()).toBeVisible();
 });
 

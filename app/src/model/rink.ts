@@ -159,8 +159,9 @@ export function viewBounds(spec: RinkSpec, view: RinkView = spec.view): Rect {
 export function clampToRink(p: Vec, spec: Pick<RinkSpec, 'lengthM' | 'widthM'>): Vec {
   const maxX = spec.lengthM / 2 + OFF_RINK_MARGIN_M;
   const maxY = spec.widthM / 2 + OFF_RINK_MARGIN_M;
+  // `+ 0` turns -0 into 0, which JSON cannot tell apart (export/import must round-trip).
   return {
-    x: Math.min(maxX, Math.max(-maxX, p.x)),
-    y: Math.min(maxY, Math.max(-maxY, p.y)),
+    x: Math.min(maxX, Math.max(-maxX, p.x)) + 0,
+    y: Math.min(maxY, Math.max(-maxY, p.y)) + 0,
   };
 }

@@ -13,6 +13,7 @@ import type { ToolGesture } from '../tools/types';
 import { DrawingLayer } from './DrawingLayer';
 import { EntityLayer } from './EntityLayer';
 import { RinkLayer } from './RinkLayer';
+import { registerStage } from './snapshot';
 import { TextEntry } from './TextEntry';
 import {
   fitViewport,
@@ -71,6 +72,13 @@ export function BoardStage({ fitSignal }: Props) {
     vpRef.current = vp;
     debugState.viewport = vp;
   }, [vp]);
+  // Let thumbnails and PNG export capture this stage.
+  const rink = board.rink;
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (stage) registerStage({ stage, vp, rink });
+  }, [vp, rink, size]);
+  useEffect(() => () => registerStage(null), []);
   const setVp = useCallback(
     (next: Viewport) => {
       vpRef.current = next;
