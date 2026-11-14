@@ -1,76 +1,79 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { canvasToBlob, captureView } from '../board/snapshot';
 import { CUSTOM_LIMITS, presetOf, RINK_PRESETS, type RinkPresetId } from '../model/rink';
 import type { RinkView } from '../model/types';
+import { fileNameFor, getFiles } from '../platform/files';
 import { useBoardStore } from '../store/boardStore';
+import { exportBoard } from '../store/library';
 
-interface Props {
-  onFit(): void;
-  /** Leading controls (back to library, board name, export). */
-  lead?: ReactNode;
+/**
+ * Settings that are set once per board rather than used every few seconds: rink size and view,
+ * team colours, export, clear drawings. Kept in a menu so the board gets the screen.
+ */
+export function BoardMenu() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Close on a tap anywhere else (the tap still reaches the board) or Escape.
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e: PointerEvent) => {
+      if (!ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('pointerdown', onDown, true);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onDown, true);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [open]);
+
+  return (
+    <div className="menu-anchor" ref={ref}>
+      <button
+        data-testid="board-menu"
+        aria-expanded={open}
+        aria-haspopup="true"
+        onClick={() => setOpen((o) => !o)}
+      >
+        Board ▾
+      </button>
+      {open && <BoardMenuPanel />}
+    </div>
+  );
 }
 
-export function Toolbar({ onFit, lead }: Props) {
+function BoardMenuPanel() {
   const rink = useBoardStore((s) => s.board.rink);
   const teamColors = useBoardStore((s) => s.board.teamColors);
-  const addEntity = useBoardStore((s) => s.addEntity);
+  const hasDrawings = useBoardStore((s) => s.board.drawings.length > 0);
   const setView = useBoardStore((s) => s.setView);
   const setRinkSize = useBoardStore((s) => s.setRinkSize);
   const setTeamColor = useBoardStore((s) => s.setTeamColor);
+  const clearDrawings = useBoardStore((s) => s.clearDrawings);
   const preset = presetOf(rink);
   const [customOpen, setCustomOpen] = useState(false);
 
   const onPreset = (id: RinkPresetId) => {
-    if (id === 'custom') {
-      setCustomOpen(true);
-      return;
-    }
+    if (id === 'custom') return setCustomOpen(true);
     setCustomOpen(false);
     setRinkSize(RINK_PRESETS[id].lengthM, RINK_PRESETS[id].widthM);
   };
 
-  return (
-    <header className="toolbar" role="toolbar" aria-label="Board tools">
-      {lead}
-      <div className="group" aria-label="Add">
-        <button
-          data-testid="add-home-player"
-          onClick={() => addEntity('player', 'home')}
-          title="Add home player"
-        >
-          <span className="swatch round" style={{ background: teamColors.home }} /> Player
-        </button>
-        <button
-          data-testid="add-away-player"
-          onClick={() => addEntity('player', 'away')}
-          title="Add away player"
-        >
-          <span className="swatch round" style={{ background: teamColors.away }} /> Player
-        </button>
-        <button
-          data-testid="add-home-goalie"
-          onClick={() => addEntity('goalie', 'home')}
-          title="Add home goalie"
-        >
-          <span className="swatch" style={{ background: teamColors.home }} /> Goalie
-        </button>
-        <button
-          data-testid="add-away-goalie"
-          onClick={() => addEntity('goalie', 'away')}
-          title="Add away goalie"
-        >
-          <span className="swatch" style={{ background: teamColors.away }} /> Goalie
-        </button>
-        <button data-testid="add-ball" onClick={() => addEntity('ball')} title="Add ball">
-          <span className="swatch round ball" /> Ball
-        </button>
-        <button data-testid="add-cone" onClick={() => addEntity('cone')} title="Add cone">
-          <span className="swatch cone" /> Cone
-        </button>
-      </div>
+  const exportPng = async () => {
+    const canvas = captureView(2);
+    if (!canvas) return;
+    const name = useBoardStore.getState().board.name;
+    await getFiles().save(fileNameFor(name, 'png'), await canvasToBlob(canvas));
+  };
 
-      <div className="group">
+  return (
+    <div className="menu-panel" role="menu" data-testid="board-menu-panel">
+      <section>
+        <h3>Rink</h3>
         <label className="field">
-          Rink
+          Size
           <select
             data-testid="rink-preset"
             value={customOpen ? 'custom' : preset}
@@ -100,13 +103,10 @@ export function Toolbar({ onFit, lead }: Props) {
             <option value="half-right">Right half</option>
           </select>
         </label>
-        <button data-testid="fit" onClick={onFit} title="Fit rink to screen">
-          Fit
-        </button>
-      </div>
-
-      <div className="group">
-        <label className="field color" title="Home team colour">
+      </section>
+      <section>
+        <h3>Team colours</h3>
+        <label className="field color">
           Home
           <input
             type="color"
@@ -115,7 +115,7 @@ export function Toolbar({ onFit, lead }: Props) {
             onChange={(e) => setTeamColor('home', e.target.value)}
           />
         </label>
-        <label className="field color" title="Away team colour">
+        <label className="field color">
           Away
           <input
             type="color"
@@ -124,8 +124,36 @@ export function Toolbar({ onFit, lead }: Props) {
             onChange={(e) => setTeamColor('away', e.target.value)}
           />
         </label>
-      </div>
-    </header>
+      </section>
+      <section>
+        <h3>Share</h3>
+        <button
+          data-testid="export-json"
+          title="Save this board as a .json file"
+          onClick={() => void exportBoard(getFiles(), useBoardStore.getState().board)}
+        >
+          Export board
+        </button>
+        <button
+          data-testid="export-png"
+          title="Save the current view as a picture"
+          onClick={exportPng}
+        >
+          Save picture (PNG)
+        </button>
+      </section>
+      <section>
+        <button
+          data-testid="clear-drawings"
+          className="danger"
+          disabled={!hasDrawings}
+          onClick={clearDrawings}
+          title="Remove all drawings; players stay"
+        >
+          Clear drawings
+        </button>
+      </section>
+    </div>
   );
 }
 

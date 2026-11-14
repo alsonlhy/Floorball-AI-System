@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { rinkToPage, snapshot, stageBox, viewportOf } from './helpers';
+import { rinkToPage, snapshot, stageBox, viewportOf, menuItem } from './helpers';
 
 async function rinkOnScreen(page: Page, lengthM: number, widthM: number) {
   const a = await rinkToPage(page, { x: -lengthM / 2, y: -widthM / 2 });
@@ -77,15 +77,15 @@ test('half-rink views show the correct half', async ({ page }) => {
   const leftEnd = { x: -15, y: 6 };
   const rightEnd = { x: 15, y: 6 };
 
-  await page.getByTestId('rink-view').selectOption('half-left');
+  await (await menuItem(page, 'rink-view')).selectOption('half-left');
   await expect.poll(() => drawnAt(leftEnd)).toBe(true);
   expect(await drawnAt(rightEnd)).toBe(false);
 
-  await page.getByTestId('rink-view').selectOption('half-right');
+  await (await menuItem(page, 'rink-view')).selectOption('half-right');
   await expect.poll(() => drawnAt(rightEnd)).toBe(true);
   expect(await drawnAt(leftEnd)).toBe(false);
 
-  await page.getByTestId('rink-view').selectOption('full');
+  await (await menuItem(page, 'rink-view')).selectOption('full');
   await expect.poll(() => drawnAt(leftEnd)).toBe(true);
   expect(await drawnAt(rightEnd)).toBe(true);
 });
@@ -93,12 +93,12 @@ test('half-rink views show the correct half', async ({ page }) => {
 test('rink size presets and custom size', async ({ page }) => {
   await page.goto('/#/new');
   await page.getByTestId('board-stage').locator('canvas').first().waitFor();
-  await page.getByTestId('rink-preset').selectOption('minimum');
+  await (await menuItem(page, 'rink-preset')).selectOption('minimum');
   expect((await snapshot(page)).rink).toMatchObject({ lengthM: 36, widthM: 18 });
-  await page.getByTestId('rink-preset').selectOption('custom');
-  await page.getByTestId('custom-length').fill('24');
-  await page.getByTestId('custom-width').fill('14');
-  await page.getByTestId('custom-apply').click();
+  await (await menuItem(page, 'rink-preset')).selectOption('custom');
+  await (await menuItem(page, 'custom-length')).fill('24');
+  await (await menuItem(page, 'custom-width')).fill('14');
+  await (await menuItem(page, 'custom-apply')).click();
   expect((await snapshot(page)).rink).toMatchObject({ lengthM: 24, widthM: 14 });
   const box = await stageBox(page);
   const r = await rinkOnScreen(page, 24, 14);

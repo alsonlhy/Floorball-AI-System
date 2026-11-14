@@ -1,18 +1,25 @@
 import { useEffect, useRef, useState } from 'react';
 import { BoardStage } from '../board/BoardStage';
-import { canvasToBlob, captureThumbnail, captureView } from '../board/snapshot';
-import { fileNameFor, getFiles } from '../platform/files';
+import { captureThumbnail } from '../board/snapshot';
 import { getRepository } from '../platform/storage';
 import { startAutosave, useSaveStatus, type Autosave } from '../store/autosave';
 import { useBoardStore } from '../store/boardStore';
-import { exportBoard } from '../store/library';
 import { useToolStore, type ToolId } from '../store/toolStore';
-import { DrawBar } from './DrawBar';
+import {
+  goToFrame,
+  pause,
+  resetPlayback,
+  stepBy,
+  togglePlay,
+  usePlayback,
+} from '../store/playback';
+import { BoardMenu } from './BoardMenu';
 import { Inspector } from './Inspector';
+import { PieceRail } from './PieceRail';
 import { navigate } from './router';
+import { StyleStrip } from './StyleStrip';
 import { Timeline } from './Timeline';
-import { Toolbar } from './Toolbar';
-import { pause, resetPlayback, togglePlay, usePlayback } from '../store/playback';
+import { ToolRail } from './ToolRail';
 
 const TOOL_KEYS: Record<string, ToolId> = {
   v: 'select',
@@ -33,7 +40,9 @@ export function BoardScreen({ id }: { id: string }) {
     useBoardStore.getState().board.id === id ? 'ready' : 'loading',
   );
   const autosave = useRef<Autosave | null>(null);
+  const presentingRef = useRef(false);
   const playing = usePlayback((p) => p.playing);
+  const [presenting, setPresenting] = useState(false);
 
   // Each board opens stopped on its first step.
   useEffect(() => {
@@ -90,6 +99,10 @@ export function BoardScreen({ id }: { id: string }) {
       const s = useBoardStore.getState();
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
+      if (e.key === 'Escape' && presentingRef.current) {
+        setPresenting(false);
+        return;
+      }
       if (e.key === ' ' && !mod) {
         e.preventDefault();
         togglePlay();
@@ -137,25 +150,104 @@ export function BoardScreen({ id }: { id: string }) {
     navigate('#/');
   };
 
+  const present = (on: boolean) => {
+    presentingRef.current = on;
+    setPresenting(on);
+    if (on) {
+      useToolStore.getState().setTool('select');
+      useBoardStore.getState().select([]);
+      enterFullscreen();
+    } else {
+      exitFullscreen();
+    }
+  };
+
   return (
-    <div className="app">
-      {/* A disabled fieldset turns every control inside off while the drill plays. */}
+    <div
+      className={`board-screen${presenting ? ' presenting' : ''}`}
+      data-testid="board-screen"
+      data-presenting={presenting}
+    >
+      {/* Disabled fieldsets turn every control inside off while the drill plays. */}
       <fieldset className="bars" disabled={playing}>
-        <Toolbar onFit={() => setFitSignal((n) => n + 1)} lead={<BoardHeader onBack={back} />} />
-        <DrawBar />
+        <TopBar onBack={back} onPresent={() => present(true)} />
+        <ToolRail />
+        <PieceRail />
       </fieldset>
       <main className="board-area">
         <BoardStage fitSignal={fitSignal} />
+        {!presenting && (
+          <fieldset className="bars" disabled={playing}>
+            <StyleStrip />
+            <Inspector />
+          </fieldset>
+        )}
+        <button
+          className="fit-btn"
+          data-testid="fit"
+          title="Fit the rink to the screen"
+          onClick={() => setFitSignal((n) => n + 1)}
+        >
+          Fit
+        </button>
+        {presenting && <PresentControls onExit={() => present(false)} />}
       </main>
       <Timeline />
-      <fieldset className="bars" disabled={playing}>
-        <Inspector />
-      </fieldset>
     </div>
   );
 }
 
-function BoardHeader({ onBack }: { onBack(): void }) {
+function enterFullscreen() {
+  const el = document.documentElement as HTMLElement & {
+    webkitRequestFullscreen?: () => Promise<void> | void;
+  };
+  try {
+    const r = el.requestFullscreen?.() ?? el.webkitRequestFullscreen?.();
+    if (r instanceof Promise) r.catch(() => undefined);
+  } catch {
+    // Not available (e.g. iPhone Safari): presentation still hides the toolbars.
+  }
+}
+
+function exitFullscreen() {
+  if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
+}
+
+/** Presentation mode: just the board, play controls if it is a drill, and a way out. */
+function PresentControls({ onExit }: { onExit(): void }) {
+  const frames = useBoardStore((s) => s.board.frames.length);
+  const frameIndex = useBoardStore((s) => s.frameIndex);
+  const playing = usePlayback((p) => p.playing);
+  return (
+    <div className="float-strip present-controls" role="toolbar" aria-label="Presentation">
+      {frames > 1 && (
+        <>
+          <button aria-label="Previous step" onClick={() => stepBy(-1)}>
+            ⏮
+          </button>
+          <button
+            data-testid="present-play"
+            aria-label={playing ? 'Pause' : 'Play'}
+            onClick={togglePlay}
+          >
+            {playing ? '❚❚' : '▶'}
+          </button>
+          <button aria-label="Next step" onClick={() => stepBy(1)}>
+            ⏭
+          </button>
+          <button aria-label="Back to step 1" onClick={() => goToFrame(0)}>
+            {frameIndex + 1}/{frames}
+          </button>
+        </>
+      )}
+      <button data-testid="exit-present" onClick={onExit}>
+        Done
+      </button>
+    </div>
+  );
+}
+
+function TopBar({ onBack, onPresent }: { onBack(): void; onPresent(): void }) {
   const name = useBoardStore((s) => s.board.name);
   const setName = useBoardStore((s) => s.setName);
   const status = useSaveStatus((s) => s.status);
@@ -164,14 +256,8 @@ function BoardHeader({ onBack }: { onBack(): void }) {
     status
   ];
 
-  const exportPng = async () => {
-    const canvas = captureView(2);
-    if (!canvas) return;
-    await getFiles().save(fileNameFor(name, 'png'), await canvasToBlob(canvas));
-  };
-
   return (
-    <div className="group board-header">
+    <header className="topbar">
       <button data-testid="back-to-library" onClick={onBack} title="All boards">
         ‹ Boards
       </button>
@@ -193,20 +279,11 @@ function BoardHeader({ onBack }: { onBack(): void }) {
       >
         {label}
       </span>
-      <button
-        data-testid="export-json"
-        title="Save this board as a .json file"
-        onClick={() => void exportBoard(getFiles(), useBoardStore.getState().board)}
-      >
-        Export
+      <span className="spacer" />
+      <button data-testid="present" onClick={onPresent} title="Show only the board">
+        Present
       </button>
-      <button
-        data-testid="export-png"
-        title="Save the current view as a picture"
-        onClick={exportPng}
-      >
-        PNG
-      </button>
-    </div>
+      <BoardMenu />
+    </header>
   );
 }

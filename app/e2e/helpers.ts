@@ -68,3 +68,10 @@ export async function entityPagePos(page: Page, id: string) {
 export async function stageBox(page: Page) {
   return (await page.getByTestId('board-stage').boundingBox())!;
 }
+
+/** A control inside the Board menu; opens the menu first if needed. */
+export async function menuItem(page: Page, testId: string) {
+  const panel = page.getByTestId('board-menu-panel');
+  if (!(await panel.isVisible())) await page.getByTestId('board-menu').click();
+  return panel.getByTestId(testId);
+}

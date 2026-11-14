@@ -30,39 +30,13 @@ body,
   background: var(--bg);
 }
 
-.app {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
-    env(safe-area-inset-left);
-}
-
-.toolbar,
-.inspector {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 12px;
-  padding: 6px 10px;
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
-}
-
-.inspector {
-  border-top: 1px solid var(--border);
-  border-bottom: 0;
-  min-height: 56px;
-}
-
-.inspector.muted {
-  color: var(--muted);
-  font-size: 14px;
-}
-
-.inspector .what {
-  font-weight: 600;
-  min-width: 6em;
+/* iPad: no rubber-band bounce of the whole page, no grey tap flash, no long-press callout. */
+html,
+body {
+  position: fixed;
+  inset: 0;
+  -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;
 }
 
 .group {
@@ -193,12 +167,6 @@ input[type='color'] {
   z-index: 2;
 }
 
-.toolbar .divider {
-  width: 1px;
-  align-self: stretch;
-  background: var(--border);
-}
-
 button[aria-pressed='true'] {
   background: #e0f2fe;
   border-color: var(--accent);
@@ -224,26 +192,8 @@ button:disabled {
   border-radius: 3px;
 }
 
-/* Narrow screens: each bar is one scrollable row so the rink keeps its space (M6 refines this). */
-@media (max-width: 820px) {
-  .toolbar {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: thin;
-  }
-  .toolbar .group {
-    flex-wrap: nowrap;
-    flex-shrink: 0;
-  }
-  .toolbar button,
-  .toolbar .field {
-    flex-shrink: 0;
-    white-space: nowrap;
-  }
-}
-
 /* ---- board header ---- */
-.board-header .board-name {
+.topbar .board-name {
   width: 12em;
   font-weight: 600;
   color: var(--text);
@@ -474,14 +424,283 @@ fieldset.bars {
   font-weight: 600;
 }
 
-@media (max-width: 820px) {
-  .timeline {
-    flex-wrap: nowrap;
+/* One row: scrolls sideways on narrow screens rather than growing taller. */
+.timeline {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.timeline .group {
+  flex-wrap: nowrap;
+}
+.timeline .group,
+.timeline button,
+.timeline .field {
+  flex-shrink: 0;
+}
+
+/* =====================================================================================
+   M6 board screen layout.
+   Landscape: tools down the left edge and pieces down the right edge, where the thumbs are
+   when holding an iPad; a slim bar on top; the timeline along the bottom.
+   Portrait: the board on top, then tools, pieces and the timeline as rows at the bottom.
+   ===================================================================================== */
+.board-screen {
+  display: grid;
+  height: 100%;
+  grid-template-areas:
+    'top top top'
+    'tools stage pieces'
+    'time time time';
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+    env(safe-area-inset-left);
+  background: var(--panel);
+  /* Chrome is for tapping, not selecting text; inputs opt back in below. */
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+.board-screen input {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.topbar {
+  grid-area: top;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--border);
+  min-width: 0;
+}
+
+.topbar .spacer {
+  flex: 1;
+}
+
+.topbar .board-name {
+  min-width: 6em;
+  width: 14em;
+  flex-shrink: 1;
+}
+
+.board-area {
+  grid-area: stage;
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.timeline {
+  grid-area: time;
+}
+
+/* ---- rails ---- */
+.rail {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 4px;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+
+.tools-rail {
+  grid-area: tools;
+  border-right: 1px solid var(--border);
+}
+
+.pieces-rail {
+  grid-area: pieces;
+  border-left: 1px solid var(--border);
+}
+
+.rail-btn {
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+  width: 64px;
+  min-height: 52px;
+  padding: 4px 2px;
+  font-size: 11px;
+  line-height: 1.1;
+  flex-shrink: 0;
+}
+
+.rail-gap {
+  flex: 1;
+  min-height: 8px;
+}
+
+.swatch.big {
+  width: 20px;
+  height: 20px;
+}
+
+.swatch.goalie {
+  border-radius: 5px;
+  border: 2px solid #111827;
+}
+
+/* ---- things floating over the board (never resize it) ---- */
+.float-strip {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  max-width: calc(100% - 16px);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 6px 24px rgba(15, 23, 42, 0.18);
+  overflow-x: auto;
+  scrollbar-width: none;
+  z-index: 3;
+}
+
+.float-strip > * {
+  flex-shrink: 0;
+}
+
+.style-strip {
+  top: 8px;
+}
+
+.inspector {
+  bottom: 8px;
+}
+
+.inspector .what {
+  font-weight: 600;
+  padding: 0 4px;
+}
+
+.present-controls {
+  bottom: calc(12px + env(safe-area-inset-bottom));
+}
+
+.float-strip .divider {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border);
+}
+
+.icon-btn {
+  padding: 0;
+  justify-content: center;
+}
+
+.fit-btn {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  z-index: 2;
+  background: rgba(255, 255, 255, 0.92);
+}
+
+/* The inspector sits at the bottom centre; keep Fit clear of it on narrow boards. */
+.board-area:has(.inspector) .fit-btn {
+  bottom: 72px;
+}
+
+/* ---- board menu ---- */
+.menu-anchor {
+  position: relative;
+}
+
+.menu-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  width: 290px;
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(15, 23, 42, 0.22);
+  z-index: 20;
+}
+
+.menu-panel section {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0;
+  border-bottom: 1px solid #eef0f3;
+}
+
+.menu-panel section:last-child {
+  border-bottom: 0;
+}
+
+.menu-panel h3 {
+  width: 100%;
+  margin: 0;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+/* ---- portrait: everything at the bottom, board on top ---- */
+@media (orientation: portrait) {
+  .board-screen {
+    grid-template-areas:
+      'top'
+      'stage'
+      'tools'
+      'pieces'
+      'time';
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto auto auto;
+  }
+  .rail {
+    flex-direction: row;
     overflow-x: auto;
+    overflow-y: hidden;
+    border: 0;
+    border-top: 1px solid var(--border);
   }
-  .timeline .group,
-  .timeline button,
-  .timeline .field {
-    flex-shrink: 0;
+  .rail-gap {
+    min-width: 8px;
+    min-height: 0;
   }
+  .rail-btn {
+    width: 60px;
+  }
+  .topbar .board-name {
+    width: 9em;
+  }
+}
+
+/* ---- presentation mode: only the board ---- */
+.board-screen.presenting {
+  grid-template-areas: 'stage';
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  padding: 0;
+}
+
+.board-screen.presenting .topbar,
+.board-screen.presenting .rail,
+.board-screen.presenting .timeline {
+  display: none;
+}
+
+.board-screen.presenting .fit-btn {
+  top: calc(8px + env(safe-area-inset-top));
+  bottom: auto;
 }

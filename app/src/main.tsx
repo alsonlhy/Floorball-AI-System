@@ -9,7 +9,10 @@ import { useBoardStore } from './store/boardStore';
 import { useToolStore } from './store/toolStore';
 import { usePlayback } from './store/playback';
 import { liveStage } from './board/snapshot';
+import { setupOffline } from './platform/pwa';
 import './styles.css';
+
+setupOffline();
 
 if (import.meta.env.DEV || new URLSearchParams(location.search).has('debug')) {
   Object.assign(window, {

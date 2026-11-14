@@ -1,6 +1,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { expect, test, type Page } from '@playwright/test';
-import { rinkToPage } from './helpers';
+import { rinkToPage, menuItem } from './helpers';
 
 type W = {
   __floorball: {
@@ -100,7 +100,7 @@ test('library: list, thumbnail, rename, duplicate, delete with confirmation', as
 test('export then import gives an identical board', async ({ page }, info) => {
   const original = await buildBoard(page, 'Free-hit routine');
   const download = page.waitForEvent('download');
-  await page.getByTestId('export-json').click();
+  await (await menuItem(page, 'export-json')).click();
   const file = await download;
   expect(file.suggestedFilename()).toBe('Free-hit routine.json');
   const path = info.outputPath('export.json');
@@ -167,7 +167,7 @@ test('a corrupt or wrong file is rejected with a readable message', async ({ pag
 test('export the current view as PNG', async ({ page }, info) => {
   await buildBoard(page, 'Picture');
   const download = page.waitForEvent('download');
-  await page.getByTestId('export-png').click();
+  await (await menuItem(page, 'export-png')).click();
   const file = await download;
   expect(file.suggestedFilename()).toBe('Picture.png');
   const path = info.outputPath('view.png');

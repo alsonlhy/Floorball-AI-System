@@ -2,7 +2,10 @@ import { useBoardStore } from '../store/boardStore';
 
 const KIND_NAMES = { player: 'Player', goalie: 'Goalie', ball: 'Ball', cone: 'Cone' } as const;
 
-/** Edit panel for the current selection: label, team, duplicate, delete. */
+/**
+ * Edit panel for the current selection (label, team, duplicate, delete), floating over the
+ * bottom of the board so it never resizes the board.
+ */
 export function Inspector() {
   const selection = useBoardStore((s) => s.selection);
   const entities = useBoardStore((s) => s.board.entities);
@@ -12,19 +15,18 @@ export function Inspector() {
   const duplicateEntities = useBoardStore((s) => s.duplicateEntities);
 
   const selected = entities.filter((e) => selection.includes(e.id));
-  if (selected.length === 0) {
-    return (
-      <footer className="inspector muted" data-testid="inspector">
-        Tap a token to select it. Drag on empty rink to select several.
-      </footer>
-    );
-  }
+  if (selected.length === 0) return null;
   const single = selected.length === 1 ? selected[0] : undefined;
   const teamable = selected.filter((e) => e.kind === 'player' || e.kind === 'goalie');
   const commonTeam = teamable.every((e) => e.team === teamable[0]?.team) ? teamable[0]?.team : '';
 
   return (
-    <footer className="inspector" data-testid="inspector">
+    <div
+      className="float-strip inspector"
+      data-testid="inspector"
+      role="group"
+      aria-label="Selection"
+    >
       <span className="what">
         {single ? KIND_NAMES[single.kind] : `${selected.length} selected`}
       </span>
@@ -65,6 +67,6 @@ export function Inspector() {
       <button data-testid="delete" className="danger" onClick={() => deleteEntities(selection)}>
         Delete
       </button>
-    </footer>
+    </div>
   );
 }

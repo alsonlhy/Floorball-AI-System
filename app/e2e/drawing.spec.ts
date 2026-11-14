@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { entityPagePos, rinkToPage, viewportOf } from './helpers';
+import { entityPagePos, rinkToPage, viewportOf, menuItem } from './helpers';
 
 type Board = { drawings: { tool: string; shape?: string; style: { dash?: string } }[] };
 type W = {
@@ -154,7 +154,7 @@ test('clear drawings keeps players; Ctrl+Z brings drawings back', async ({ page 
     { x: 6, y: 3 },
   ]);
   const before = await board(page);
-  await page.getByTestId('clear-drawings').click();
+  await (await menuItem(page, 'clear-drawings')).click();
   const after = await board(page);
   expect(after.drawings).toEqual([]);
   expect(after.frames).toEqual(before.frames);
