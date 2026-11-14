@@ -10,7 +10,9 @@ import { useToolStore, type ToolId } from '../store/toolStore';
 import { DrawBar } from './DrawBar';
 import { Inspector } from './Inspector';
 import { navigate } from './router';
+import { Timeline } from './Timeline';
 import { Toolbar } from './Toolbar';
+import { pause, resetPlayback, togglePlay, usePlayback } from '../store/playback';
 
 const TOOL_KEYS: Record<string, ToolId> = {
   v: 'select',
@@ -31,6 +33,13 @@ export function BoardScreen({ id }: { id: string }) {
     useBoardStore.getState().board.id === id ? 'ready' : 'loading',
   );
   const autosave = useRef<Autosave | null>(null);
+  const playing = usePlayback((p) => p.playing);
+
+  // Each board opens stopped on its first step.
+  useEffect(() => {
+    resetPlayback();
+    return resetPlayback;
+  }, []);
 
   // Load the board, unless it is already in the store (just created). The screen is keyed
   // by id, so this runs once per board.
@@ -81,6 +90,16 @@ export function BoardScreen({ id }: { id: string }) {
       const s = useBoardStore.getState();
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
+      if (e.key === ' ' && !mod) {
+        e.preventDefault();
+        togglePlay();
+        return;
+      }
+      // Nothing is edited while a drill plays (PLAN.md M5).
+      if (usePlayback.getState().playing) {
+        if (e.key === 'Escape') pause();
+        return;
+      }
       if (mod && key === 'z') {
         e.preventDefault();
         if (e.shiftKey) s.redo();
@@ -120,12 +139,18 @@ export function BoardScreen({ id }: { id: string }) {
 
   return (
     <div className="app">
-      <Toolbar onFit={() => setFitSignal((n) => n + 1)} lead={<BoardHeader onBack={back} />} />
-      <DrawBar />
+      {/* A disabled fieldset turns every control inside off while the drill plays. */}
+      <fieldset className="bars" disabled={playing}>
+        <Toolbar onFit={() => setFitSignal((n) => n + 1)} lead={<BoardHeader onBack={back} />} />
+        <DrawBar />
+      </fieldset>
       <main className="board-area">
         <BoardStage fitSignal={fitSignal} />
       </main>
-      <Inspector />
+      <Timeline />
+      <fieldset className="bars" disabled={playing}>
+        <Inspector />
+      </fieldset>
     </div>
   );
 }

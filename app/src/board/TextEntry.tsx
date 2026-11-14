@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useBoardStore } from '../store/boardStore';
+import { addDrawingHere } from '../tools/pin';
 import { useToolStore } from '../store/toolStore';
 import { commitText } from '../tools/text';
 import type { Vec } from '../model/types';
@@ -18,13 +18,7 @@ export function TextEntry({ at }: { at: Vec }) {
     done.current = true;
     const ts = useToolStore.getState();
     if (save && ts.textAt && ref.current) {
-      commitText(
-        useBoardStore.getState().addDrawing,
-        ts.textAt,
-        ref.current.value,
-        ts.color,
-        ts.width,
-      );
+      commitText(addDrawingHere, ts.textAt, ref.current.value, ts.color, ts.width);
     }
     ts.setTextAt(null);
   };

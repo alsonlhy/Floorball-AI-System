@@ -7,6 +7,8 @@ import { rinkGeometry, viewBounds } from './model/rink';
 import { getRepository } from './platform/storage';
 import { useBoardStore } from './store/boardStore';
 import { useToolStore } from './store/toolStore';
+import { usePlayback } from './store/playback';
+import { liveStage } from './board/snapshot';
 import './styles.css';
 
 if (import.meta.env.DEV || new URLSearchParams(location.search).has('debug')) {
@@ -15,6 +17,8 @@ if (import.meta.env.DEV || new URLSearchParams(location.search).has('debug')) {
       store: useBoardStore,
       tools: useToolStore,
       repo: getRepository,
+      playback: usePlayback,
+      stage: liveStage,
       debugState,
       viewport,
       rinkGeometry,

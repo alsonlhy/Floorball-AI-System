@@ -110,6 +110,16 @@ export function DrawBar() {
       </div>
 
       <div className="group" style={{ marginLeft: 'auto' }}>
+        {styled && (
+          <button
+            data-testid="pin-to-step"
+            aria-pressed={t.pinToStep}
+            onClick={() => t.setPinToStep(!t.pinToStep)}
+            title="New drawings show on this step only, not on every step"
+          >
+            This step only
+          </button>
+        )}
         <button data-testid="undo" disabled={!canUndo} onClick={undo} title="Undo (Ctrl+Z)">
           Undo
         </button>

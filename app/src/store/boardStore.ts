@@ -17,7 +17,7 @@ import type {
 
 export interface BoardState {
   board: Board;
-  /** Index of the frame being edited. Until M5 there is only frame 0. */
+  /** Index of the frame (drill step) being shown and edited. */
   frameIndex: number;
   selection: string[];
   history: History<Board>;
@@ -36,6 +36,14 @@ export interface BoardState {
   setView(view: RinkView): void;
   setTeamColor(team: 'home' | 'away', color: string): void;
   setName(name: string): void;
+
+  /** Show and edit another step. Not an undo step. */
+  selectFrame(index: number): void;
+  /** New step after the current one, copying its positions; becomes the current step. */
+  addFrame(): void;
+  deleteFrame(index: number): void;
+  /** Time to move from this step to the next. */
+  setFrameDuration(index: number, ms: number): void;
 
   addDrawing(d: Omit<Drawing, 'id'>): string;
   deleteDrawings(ids: string[]): void;
@@ -74,6 +82,13 @@ function mapFrames(board: Board, fn: (f: Frame, i: number) => Frame): Board {
   return { ...board, frames: board.frames.map(fn) };
 }
 
+function clampFrame(board: Board, index: number): number {
+  return Math.max(0, Math.min(index, board.frames.length - 1));
+}
+
+export const MIN_FRAME_MS = 200;
+export const MAX_FRAME_MS = 10_000;
+
 function liveSelection(board: Board, selection: string[]): string[] {
   const ids = new Set(board.entities.map((e) => e.id));
   return selection.filter((id) => ids.has(id));
@@ -106,9 +121,10 @@ export const useBoardStore = create<BoardState>()((set, get) => {
       const entity: Entity = { id: newId(idPrefix(kind)), kind, team: t };
       const label = nextLabel(s.board.entities, kind, t);
       if (label !== undefined) entity.label = label;
+      // A piece added at step k is on the board from step k onwards (PLAN.md M5).
       const fi = s.frameIndex;
       const board = mapFrames(s.board, (f, i) =>
-        i === fi ? { ...f, positions: { ...f.positions, [entity.id]: pos } } : f,
+        i >= fi ? { ...f, positions: { ...f.positions, [entity.id]: pos } } : f,
       );
       commit(
         { ...board, entities: [...board.entities, entity] },
@@ -244,6 +260,49 @@ export const useBoardStore = create<BoardState>()((set, get) => {
       commit({ ...s.board, name: next }, { key: 'name' });
     },
 
+    selectFrame(index) {
+      const s = get();
+      const i = clampFrame(s.board, index);
+      if (i !== s.frameIndex) set({ frameIndex: i });
+    },
+
+    addFrame() {
+      const s = get();
+      const cur = currentFrame(s);
+      const frame: Frame = {
+        id: newId('f_'),
+        durationMs: cur.durationMs,
+        positions: { ...cur.positions },
+      };
+      const at = s.frameIndex + 1;
+      const frames = [...s.board.frames.slice(0, at), frame, ...s.board.frames.slice(at)];
+      commit({ ...s.board, frames }, { extra: { frameIndex: at } });
+    },
+
+    deleteFrame(index) {
+      const s = get();
+      const gone = s.board.frames[index];
+      if (!gone || s.board.frames.length <= 1) return;
+      const frames = s.board.frames.filter((_, i) => i !== index);
+      // Drawings pinned to the deleted step go with it.
+      const drawings = s.board.drawings.filter((d) => d.frameId !== gone.id);
+      const frameIndex =
+        s.frameIndex > index ? s.frameIndex - 1 : Math.min(s.frameIndex, frames.length - 1);
+      commit({ ...s.board, frames, drawings }, { extra: { frameIndex } });
+    },
+
+    setFrameDuration(index, ms) {
+      const s = get();
+      const f = s.board.frames[index];
+      if (!f) return;
+      const durationMs = Math.round(Math.min(MAX_FRAME_MS, Math.max(MIN_FRAME_MS, ms)));
+      if (durationMs === f.durationMs) return;
+      commit(
+        mapFrames(s.board, (fr, i) => (i === index ? { ...fr, durationMs } : fr)),
+        { key: `duration:${f.id}` },
+      );
+    },
+
     addDrawing(d) {
       const s = get();
       // + 0 turns -0 into 0 so saved files round-trip exactly.
@@ -286,7 +345,12 @@ export const useBoardStore = create<BoardState>()((set, get) => {
       const s = get();
       const r = undo(s.history, s.board);
       if (!r) return;
-      set({ board: r.value, history: r.history, selection: liveSelection(r.value, s.selection) });
+      set({
+        board: r.value,
+        history: r.history,
+        selection: liveSelection(r.value, s.selection),
+        frameIndex: clampFrame(r.value, s.frameIndex),
+      });
     },
 
     redo() {
@@ -294,7 +358,12 @@ export const useBoardStore = create<BoardState>()((set, get) => {
       const s = get();
       const r = redo(s.history, s.board);
       if (!r) return;
-      set({ board: r.value, history: r.history, selection: liveSelection(r.value, s.selection) });
+      set({
+        board: r.value,
+        history: r.history,
+        selection: liveSelection(r.value, s.selection),
+        frameIndex: clampFrame(r.value, s.frameIndex),
+      });
     },
 
     canUndo() {

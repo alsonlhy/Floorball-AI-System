@@ -14,7 +14,8 @@ async function rinkOnScreen(page: Page, lengthM: number, widthM: number) {
 
 const sizes = [
   { name: 'landscape tablet', width: 1024, height: 768, rotation: 0 },
-  { name: 'portrait tablet', width: 768, height: 1024, rotation: 90 },
+  // Toolbars use enough height on a portrait tablet that either orientation can win.
+  { name: 'portrait tablet', width: 768, height: 1024, rotation: undefined },
   { name: 'phone', width: 390, height: 844, rotation: 90 },
 ];
 
@@ -34,7 +35,7 @@ for (const s of sizes) {
     expect(vp.scale).toBeCloseTo(vp.rotation === 90 ? s90 : s0, 6);
     if (vp.rotation === 0) expect(s90).toBeLessThanOrEqual(s0 * 1.05);
     else expect(s90).toBeGreaterThan(s0 * 1.05);
-    expect(vp.rotation).toBe(s.rotation);
+    if (s.rotation !== undefined) expect(vp.rotation).toBe(s.rotation);
     const r = await rinkOnScreen(page, 40, 20);
     // Inside the stage
     expect(r.left).toBeGreaterThanOrEqual(box.x - 0.5);

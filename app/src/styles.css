@@ -432,3 +432,56 @@ button.danger.solid {
   height: 100%;
   color: var(--muted);
 }
+
+/* ---- M5: toolbars are fieldsets so playback can disable them in one go ---- */
+fieldset.bars {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  display: contents;
+}
+
+/* ---- timeline ---- */
+.timeline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+  padding: 6px 10px;
+  background: var(--panel);
+  border-top: 1px solid var(--border);
+}
+
+.timeline .play {
+  min-width: 56px;
+  font-size: 18px;
+  justify-content: center;
+}
+
+.timeline .scrubber {
+  flex: 1 1 160px;
+  min-width: 120px;
+  min-height: 44px;
+  border: 0;
+  background: transparent;
+  padding: 0;
+  accent-color: var(--accent);
+}
+
+.step-chip {
+  justify-content: center;
+  font-weight: 600;
+}
+
+@media (max-width: 820px) {
+  .timeline {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+  }
+  .timeline .group,
+  .timeline button,
+  .timeline .field {
+    flex-shrink: 0;
+  }
+}

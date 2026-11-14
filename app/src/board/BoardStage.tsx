@@ -9,10 +9,13 @@ import type { Vec } from '../model/types';
 import { useBoardStore } from '../store/boardStore';
 import { useToolStore } from '../store/toolStore';
 import { TOOLS } from '../tools';
+import { addDrawingHere } from '../tools/pin';
+import { snapToFrame, usePlayback } from '../store/playback';
 import type { ToolGesture } from '../tools/types';
 import { DrawingLayer } from './DrawingLayer';
 import { EntityLayer } from './EntityLayer';
 import { RinkLayer } from './RinkLayer';
+import { TrailLayer } from './TrailLayer';
 import { registerStage } from './snapshot';
 import { TextEntry } from './TextEntry';
 import {
@@ -92,9 +95,17 @@ export function BoardStage({ fitSignal }: Props) {
     () => new KeyframeTrackSource(board.entities, board.frames),
     [board.entities, board.frames],
   );
-  const states = useMemo(() => source.stateAt(source.frameTime(frameIndex)), [source, frameIndex]);
-  // ---- Rule 3: drawings visible on this frame ----
-  const frameId = board.frames[frameIndex]?.id;
+  // Playback (M5): show the playhead while playing, the paused time between steps, or the step.
+  const playing = usePlayback((p) => p.playing);
+  const playheadMs = usePlayback((p) => p.playheadMs);
+  const pausedAt = usePlayback((p) => p.pausedAt);
+  const trails = usePlayback((p) => p.trails);
+  const betweenSteps = playing || pausedAt !== null;
+  const displayT = playing ? playheadMs : (pausedAt ?? source.frameTime(frameIndex));
+  const states = useMemo(() => source.stateAt(displayT), [source, displayT]);
+  // ---- Rule 3: drawings visible on the step being shown ----
+  const shownFrame = betweenSteps ? source.frameIndexAt(displayT) : frameIndex;
+  const frameId = board.frames[shownFrame]?.id;
   const drawings = useMemo(
     () => drawingsForFrame(board.drawings, frameId),
     [board.drawings, frameId],
@@ -144,8 +155,23 @@ export function BoardStage({ fitSignal }: Props) {
     endGesture();
   };
 
+  /**
+   * While playing nothing is edited. Paused between steps, the first tap snaps the board to
+   * the nearest step (where edits go) instead of editing an in-between picture.
+   */
+  const editLocked = (): boolean => {
+    const p = usePlayback.getState();
+    if (p.playing) return true;
+    if (p.pausedAt !== null) {
+      snapToFrame();
+      return true;
+    }
+    return false;
+  };
+
   const startDrawing = (ev: React.PointerEvent) => {
     if (tool === 'select') return;
+    if (editLocked()) return;
     const ts = useToolStore.getState();
     if (ts.textAt) {
       // A tap elsewhere while typing commits the text (TextEntry's blur) and starts nothing.
@@ -156,7 +182,7 @@ export function BoardStage({ fitSignal }: Props) {
     const pressure = ev.pointerType === 'pen' ? ev.pressure : undefined;
     const gesture = TOOLS[tool].begin(
       {
-        board: bs,
+        board: { ...bs, addDrawing: addDrawingHere },
         getBoard: () => useBoardStore.getState().board,
         tools: ts,
         scale: vpRef.current.scale,
@@ -275,6 +301,7 @@ export function BoardStage({ fitSignal }: Props) {
   // ---- select tool: tap empty space clears selection; drag on empty space box-selects ----
   const onStagePointerDown = (e: Konva.KonvaEventObject<PointerEvent>) => {
     if (tool !== 'select') return;
+    if (editLocked()) return;
     if (e.target !== e.target.getStage()) return;
     if (e.evt.button !== 0 || pinch.current || touches.current.size > 1) return;
     const pt = localPoint(e.evt);
@@ -342,6 +369,9 @@ export function BoardStage({ fitSignal }: Props) {
         >
           <RinkLayer spec={board.rink} vp={vp} />
           <DrawingLayer drawings={drawings} draft={draft} vp={vp} />
+          {trails && !betweenSteps && (
+            <TrailLayer from={board.frames[frameIndex]} to={board.frames[frameIndex + 1]} vp={vp} />
+          )}
           <EntityLayer
             entities={source.entities}
             states={states}
@@ -349,7 +379,7 @@ export function BoardStage({ fitSignal }: Props) {
             rink={board.rink}
             teamColors={board.teamColors}
             selection={selection}
-            interactive={tool === 'select'}
+            interactive={tool === 'select' && !betweenSteps}
             onSelect={(id, additive) => (additive ? toggleSelect(id) : select([id]))}
             onMove={moveEntities}
             onDragBegin={beginGesture}

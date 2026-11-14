@@ -31,6 +31,26 @@ export class KeyframeTrackSource implements TrackSource {
     return this.starts[Math.max(0, Math.min(index, this.starts.length - 1))] ?? 0;
   }
 
+  get frameCount(): number {
+    return this.frames.length;
+  }
+
+  /** The step whose transition contains t (the last step at or before t). */
+  frameIndexAt(tMs: number): number {
+    let i = 0;
+    while (i < this.starts.length - 1 && (this.starts[i + 1] ?? Infinity) <= tMs) i++;
+    return i;
+  }
+
+  /** The step whose time is closest to t (ties go to the earlier step). */
+  nearestFrameIndex(tMs: number): number {
+    let best = 0;
+    this.starts.forEach((s, i) => {
+      if (Math.abs(s - tMs) < Math.abs((this.starts[best] ?? 0) - tMs)) best = i;
+    });
+    return best;
+  }
+
   stateAt(tMs: number): Map<string, EntityState> {
     const out = new Map<string, EntityState>();
     const n = this.frames.length;

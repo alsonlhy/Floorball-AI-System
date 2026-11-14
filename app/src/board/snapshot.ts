@@ -18,6 +18,9 @@ export function registerStage(l: Live | null): void {
   live = l;
 }
 
+/** The stage on screen (debug hooks and tests). */
+export const liveStage = () => live?.stage ?? null;
+
 export const BOARD_BACKGROUND = '#cfd8e1';
 
 function compose(src: HTMLCanvasElement, background: string): HTMLCanvasElement {
